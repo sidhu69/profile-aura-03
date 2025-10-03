@@ -1,9 +1,7 @@
-name: Build and Deploy
+name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -12,70 +10,53 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Setup Node.js
+    - name: Setup Node.js (auto-installed by GitHub)
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: '20'
         cache: 'npm'
     
-    - name: Install dependencies
+    - name: Install npm dependencies (auto-installed by GitHub)
       run: npm ci
     
-    - name: Build production (skip lint)
+    - name: Build React app
       run: npm run build
       env:
         VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
     
-    - name: Upload build artifacts
+    - name: Install Capacitor (auto-installed by GitHub)
+      run: |
+        npm install @capacitor/core @capacitor/cli @capacitor/android
+        npx cap add android
+        npx cap sync android
+    
+    - name: Setup Java (auto-installed by GitHub)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Build APK
+      run: |
+        cd android
+        chmod +x ./gradlew
+        ./gradlew assembleDebug --no-daemon
+    
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: production-build
-        path: dist/
+        name: Profile-Aura-App
+        path: android/app/build/outputs/apk/debug/app-debug.apk
         retention-days: 30
     
-    - name: Build success report
+    - name: Success message
       run: |
-        echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+        echo "## ✅ Android APK Built Successfully!" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📦 Build Size:" >> $GITHUB_STEP_SUMMARY
-        du -sh dist/ >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📁 Build Contents:" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        ls -lah dist/ >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-  # Optional: Deploy to GitHub Pages
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    
-    steps:
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: production-build
-        path: dist/
-    
-    - name: Setup Pages
-      uses: actions/configure-pages@v4
-    
-    - name: Upload to GitHub Pages
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: dist/
-    
-    - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v4
+        echo "### 📱 Your app is ready!" >> $GITHUB_STEP_SUMMARY
+        echo "Download the APK from the 'Artifacts' section above" >> $GITHUB_STEP_SUMMARY
